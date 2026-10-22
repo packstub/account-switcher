@@ -1,0 +1,88 @@
+{
+    "name": "packstub/account-switcher",
+    "description": "Switch between accounts in a Laravel app without signing out: user impersonation with a banner and switch back, linked sub-accounts with password-confirmed escalation, one-click developer logins, and an audit log of every switch. packstub/filament-account-switcher adds the panel UI.",
+    "keywords": [
+        "packstub",
+        "laravel",
+        "impersonate",
+        "impersonation",
+        "account-switcher",
+        "linked-accounts",
+        "sub-accounts",
+        "developer-login",
+        "switch-user",
+        "login-as"
+    ],
+    "homepage": "https://github.com/packstub/account-switcher",
+    "support": {
+        "issues": "https://github.com/packstub/account-switcher/issues",
+        "source": "https://github.com/packstub/account-switcher",
+        "docs": "https://packstub.dev/docs/account-switcher"
+    },
+    "license": "MIT",
+    "funding": [
+        {
+            "type": "github",
+            "url": "https://github.com/sponsors/icaliman"
+        }
+    ],
+    "authors": [
+        {
+            "name": "Ion Caliman",
+            "email": "icaliman92@gmail.com",
+            "role": "Developer"
+        },
+        {
+            "name": "Packstub",
+            "email": "support@packstub.dev",
+            "homepage": "https://packstub.dev"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/contracts": "^12.0 || ^13.0",
+        "spatie/laravel-package-tools": "^1.92"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.27",
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "pestphp/pest": "^4.0 || ^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Packstub\\AccountSwitcher\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Packstub\\AccountSwitcher\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "test:filter": "pest --filter",
+        "lint": "vendor/bin/pint",
+        "lint:test": "vendor/bin/pint --test"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.x-dev"
+        },
+        "laravel": {
+            "providers": [
+                "Packstub\\AccountSwitcher\\AccountSwitcherServiceProvider"
+            ],
+            "aliases": {
+                "AccountSwitcher": "Packstub\\AccountSwitcher\\Facades\\AccountSwitcher"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
