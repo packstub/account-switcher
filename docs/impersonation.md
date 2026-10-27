@@ -70,6 +70,17 @@ While impersonating, a fixed banner reads *"You are signed in as Jane, impersona
 
 To restyle it completely, publish the views and edit `resources/views/vendor/account-switcher/components/banner.blade.php`. The banner uses inline styles only, so it needs no build step and works with any CSS setup.
 
+## Landing on a hidden page
+
+The page the browser lands on after a switch may be one the new account cannot see: a record the impersonated user has no access to, or a page that does not exist for them. Rather than show them a 403 or 404 as their first impression, give the app context a fallback; the switch flashes it and, if the landing request fails with 403 or 404, the browser is sent there instead. It applies to that one request only.
+
+```php
+$this->app->make(AppContext::class)
+    ->fallbackTo(fn (User $user): string => route('dashboard'));
+```
+
+Off until set. Inside a Filament panel the plugin turns it on by itself and sends the account to a panel it may access.
+
 ## Switching back
 
 **Switch back** posts to `account-switcher.switch-back`, a CSRF-protected route behind `auth`. It restores the impersonator's session, logs the end of the impersonation and returns to the page the impersonation started from.

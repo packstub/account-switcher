@@ -50,6 +50,7 @@ abstract class TestCase extends Orchestra
 
             Route::view('login', 'login')->name('login');
             Route::view('dashboard', 'dashboard')->middleware('auth')->name('dashboard');
+            Route::get('admin-only', fn () => abort_unless(auth()->user()?->is_admin, 403, 'Admins only'))->middleware('auth')->name('admin-only');
         });
     }
 
@@ -66,7 +67,7 @@ abstract class TestCase extends Orchestra
             $table->timestamps();
         });
 
-        foreach (['create_linked_accounts_table', 'create_account_switches_table'] as $migration) {
+        foreach (['create_linked_accounts_table', 'create_account_switches_table', 'add_context_to_account_switches_table'] as $migration) {
             (include __DIR__."/../database/migrations/{$migration}.php.stub")->up();
         }
     }

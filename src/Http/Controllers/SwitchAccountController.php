@@ -6,6 +6,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Packstub\AccountSwitcher\AccountSwitcher;
+use Packstub\AccountSwitcher\Enums\SwitchReason;
 use Packstub\AccountSwitcher\Exceptions\AccountSwitchDenied;
 
 /**
@@ -36,6 +37,6 @@ class SwitchAccountController
             throw ValidationException::withMessages(['password' => $exception->getMessage()]);
         }
 
-        return redirect()->to($switcher->redirectUrlFor($target));
+        return redirect()->to($switcher->redirectUrlFor($target, SwitchReason::LinkedAccount));
     }
 }

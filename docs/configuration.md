@@ -66,7 +66,18 @@ Both tables follow the user model's connection, so they always sit next to the `
 
 ### Redirects
 
-After a switch the browser goes to `redirectTo()` on the app context if set, else `redirect_to` from the config, else the home page. A closure receives the user who was just signed in.
+After a switch the browser goes to `redirectTo()` on the app context if set, else `redirect_to` from the config, else the home page. A closure receives the user who was just signed in and the `SwitchReason`, so one rule can send an impersonation and a developer login to different places. Developer logins may have a landing page of their own, `developerLoginRedirectTo()`; see [Developer logins](developer-logins.md#where-it-lands).
+
+### Landing on a hidden page
+
+The page the browser lands on after a switch may be one the new account cannot see. Give the app context a fallback and a 403 or 404 on that first page is answered with a redirect to it, once; later 403s and 404s are shown as usual:
+
+```php
+$this->app->make(AppContext::class)
+    ->fallbackTo(fn (User $user): string => route('dashboard'));
+```
+
+Off until set. The switch flashes the URL in the session (`AccountSwitcher::FALLBACK_URL_SESSION_KEY`) and the package's exception handler hook reads it on the next request.
 
 ## The app context
 
@@ -85,14 +96,27 @@ public function boot(): void
         // Whether an account may sign in here at all (a linked account that may not is never offered)
         ->canAccessUsing(fn (User $user): bool => $user->is_active)
 
-        // Where to land after a switch (string or Closure(Authenticatable): string)
-        ->redirectTo(fn (User $user): string => route('dashboard'))
+        // Where to land after a switch (string or Closure(Authenticatable, ?SwitchReason): string)
+        ->redirectTo(fn (User $user, ?SwitchReason $reason): string => route('dashboard'))
+
+        // Where a 403 or 404 landing page is sent, once (off until set)
+        ->fallbackTo(fn (User $user): string => route('dashboard'))
 
         // How users are named in the banner and the developer login buttons
         ->userLabelUsing(fn (User $user): string => $user->full_name)
 
         // The developer login accounts (a closure returning users, e-mails, or null for the first ten)
-        ->developerLoginUsersUsing(fn () => User::query()->where('role', 'developer')->get());
+        ->developerLoginUsersUsing(fn () => User::query()->where('role', 'developer')->get())
+
+        // Developer logins: a runtime gate, labels, tags, a search beyond the list, their own landing page
+        ->developerLoginsWhen(fn (): bool => app()->environment('local') || auth()->check())
+        ->developerLoginLabelUsing(fn (User $user): string => "{$user->role} ({$user->username})")
+        ->developerLoginGroupUsing(fn (User $user): ?string => $user->role)
+        ->developerLoginSearchUsing(fn (string $search) => User::query()->whereLike('email', "%{$search}%", caseSensitive: false)->limit(20)->get())
+        ->developerLoginRedirectTo('/app')
+
+        // Extra data for every switch-log row
+        ->switchLogContextUsing(fn (SwitchReason $reason): array => ['tenant' => tenant('id')]);
 }
 ```
 
@@ -108,9 +132,38 @@ Every switch writes one row to `account_switches`:
 | `panel` | Where it happened: the context's scope (null in a plain app, the panel id in Filament) |
 | `guard` | The guard the session was signed in on |
 | `ip_address`, `user_agent` | From the request |
+| `context` | Extra data you attach (JSON, nullable), see below |
 | `created_at` | When |
 
 Query it with the `Packstub\AccountSwitcher\Models\AccountSwitch` model (`fromUser()` / `toUser()` relationships) for an "Account activity" page. Turn logging off with `log_switches`.
+
+### Context
+
+Attach what the row cannot infer: the tenant, a ticket number, the client app. App-wide, from a service provider:
+
+```php
+use Packstub\AccountSwitcher\AccountSwitcher;
+
+AccountSwitcher::resolveLogContextUsing(fn (SwitchReason $reason): array => [
+    'tenant' => tenant()?->getTenantKey(),
+]);
+```
+
+The context's own data is merged over it (`switchLogContextUsing()` on the app context, `->switchLogContextUsing()` on a Filament panel's plugin), and what you pass to `log()` over both.
+
+Installs that predate the column get it from the guarded `add_context_to_account_switches_table` migration: `php artisan vendor:publish --tag="account-switcher-migrations"`, then `php artisan migrate`.
+
+### Switches made elsewhere
+
+Some switches never go through the package: a tenancy package's impersonation token redeemed on another domain, an SSO hand-off. Log them in the same table so the audit trail stays complete:
+
+```php
+use Packstub\AccountSwitcher\Facades\AccountSwitcher;
+
+AccountSwitcher::log(from: $centralUser, to: $tenantUser, reason: SwitchReason::Impersonation, context: ['tenant' => $tenant->id]);
+```
+
+It honours `log_switches` and returns the row, or `null` when logging is off.
 
 ## Events
 
@@ -139,8 +192,9 @@ Event::listen(AccountSwitched::class, function (AccountSwitched $event): void {
 | `canImpersonate($by, $target)` / `impersonate($target)` / `isImpersonating()` / `impersonator()` / `stopImpersonating()` | Impersonation |
 | `canSwitchToLinkedAccount($from, $to)` / `requiresPassword($from, $to)` / `switchToLinkedAccount($to, $password)` / `switchableAccounts($user)` | Linked accounts |
 | `passwordMatches($account, $password)` | Verify a plain-text password against an account |
-| `developerLoginsEnabled()` / `developerLoginUsers()` / `developerLogin($user)` | Developer logins |
-| `redirectUrlFor($user)` | Where to land after a switch |
+| `developerLoginsEnabled()` / `developerLoginUsers()` / `searchDeveloperLogins($search)` / `isDeveloperLoginAllowed($user, $search)` / `developerLogin($user, $search)` / `developerLoginRedirectUrl($user)` | Developer logins |
+| `redirectUrlFor($user, $reason)` / `redirectWhenPageIsInaccessible($exception, $request)` | Where to land after a switch; the landing-page fallback |
+| `log($from, $to, $reason, $context)` / `AccountSwitcher::resolveLogContextUsing($callback)` | The switch log |
 | `context()` | The bound `SwitchContext` |
 | `userModel()` / `connectionName()` / `resolveUsers($users)` | The resolved user model class, the tables' connection, users from a closure or an e-mail list |
 
@@ -148,7 +202,7 @@ Denied operations throw `Packstub\AccountSwitcher\Exceptions\AccountSwitchDenied
 
 ## Your own context
 
-Everything that depends on *where* a switch happens is behind the `Packstub\AccountSwitcher\Contracts\SwitchContext` contract: the guard, the scope written to the log, user labels, access, redirects, the feature toggles, the extra rules, the developer login list and the URLs the two components post to. The package binds `AppContext`; the Filament package binds a context that answers from the current panel. Bind your own when your app has several places to sign in:
+Everything that depends on *where* a switch happens is behind the `Packstub\AccountSwitcher\Contracts\SwitchContext` contract: the guard, the scope written to the log, user labels, access, redirects and the landing-page fallback, the feature toggles, the extra rules, the developer login list with its gate, labels, tags, search and landing page, the log context, and the URLs the two components post to. The package binds `AppContext`; the Filament package binds a context that answers from the current panel. Bind your own when your app has several places to sign in, and build it on `AppContext`: a method added to the contract in a minor then comes with its default.
 
 ```php
 use Packstub\AccountSwitcher\AppContext;

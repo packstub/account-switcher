@@ -23,8 +23,8 @@ Works with any session guard: Breeze, Jetstream, Fortify, Inertia or your own lo
 
 - **[Impersonation](docs/impersonation.md)**: a route and a facade to sign in as a user, a Blade banner with Switch back, rules on your model.
 - **[Linked accounts](docs/linked-accounts.md)**: work from a low-privilege account and switch up to admin only when you need it, with the admin password.
-- **[Developer logins](docs/developer-logins.md)**: one-click sign-in buttons for your seeded accounts, only in the environments you allow.
-- **[Audit trail](docs/configuration.md#the-switch-log)**: every switch logged with who, why, guard, IP and user agent, plus `AccountSwitching` and `AccountSwitched` events.
+- **[Developer logins](docs/developer-logins.md)**: one-click sign-in buttons for your seeded accounts, only in the environments you allow; labels, tags, a runtime gate and a search hook for a menu of your own.
+- **[Audit trail](docs/configuration.md#the-switch-log)**: every switch logged with who, why, guard, IP, user agent and the context you attach (the tenant, ...), `AccountSwitcher::log()` for switches made elsewhere, plus `AccountSwitching` and `AccountSwitched` events.
 - **[One session path](docs/security.md)**: every switch re-authenticates your guard, regenerates the session and never sets "remember me".
 - **Multi-database aware**: the two tables follow your user model's connection, so they stay central under multi-database tenancy.
 

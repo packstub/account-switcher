@@ -8,7 +8,8 @@ use Illuminate\Http\Request;
 use Packstub\AccountSwitcher\AccountSwitcher;
 
 /**
- * POST account-switcher/developer-login with `user`: sign in as a listed account, in allowed environments only.
+ * POST account-switcher/developer-login with `user`: sign in as a listed account, in allowed environments
+ * only. With `search`, an account the context's search returns for that text is accepted too.
  */
 class DeveloperLoginController
 {
@@ -18,16 +19,19 @@ class DeveloperLoginController
 
         $validated = $request->validate([
             'user' => ['required'],
+            'search' => ['nullable', 'string'],
         ]);
 
-        $user = $switcher->developerLoginUsers()->first(
-            fn (Authenticatable $candidate): bool => (string) $candidate->getAuthIdentifier() === (string) $validated['user'],
-        );
+        $search = filled($request->input('search')) ? (string) $request->input('search') : null;
+        $matches = fn (Authenticatable $candidate): bool => (string) $candidate->getAuthIdentifier() === (string) $validated['user'];
+
+        $user = $switcher->developerLoginUsers()->first($matches)
+            ?? ($search !== null ? $switcher->searchDeveloperLogins($search)->first($matches) : null);
 
         abort_unless($user !== null, 404);
 
-        $switcher->developerLogin($user);
+        $switcher->developerLogin($user, $search);
 
-        return redirect()->to($switcher->redirectUrlFor($user));
+        return redirect()->to($switcher->developerLoginRedirectUrl($user));
     }
 }

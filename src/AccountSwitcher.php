@@ -6,6 +6,8 @@ use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
@@ -22,6 +24,7 @@ use Packstub\AccountSwitcher\Http\Controllers\ImpersonateController;
 use Packstub\AccountSwitcher\Http\Controllers\SwitchAccountController;
 use Packstub\AccountSwitcher\Http\Controllers\SwitchBackController;
 use Packstub\AccountSwitcher\Models\AccountSwitch;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 /**
  * The session core shared by all three features. Every switch goes through
@@ -37,6 +40,13 @@ class AccountSwitcher
     use Macroable;
 
     public const SESSION_KEY = 'packstub_account_switcher';
+
+    /**
+     * Flashed on every switch: where to send the browser when the page it lands on is hidden from the new account.
+     */
+    public const FALLBACK_URL_SESSION_KEY = 'packstub_account_switcher_fallback_url';
+
+    protected static ?Closure $logContextResolver = null;
 
     /**
      * @return class-string<Model>
@@ -214,7 +224,7 @@ class AccountSwitcher
             AccountSwitched::dispatch($impersonated, $impersonator, SwitchReason::ImpersonationEnded);
         }
 
-        return $backTo ?: $this->redirectUrlFor($impersonator);
+        return $backTo ?: $this->redirectUrlFor($impersonator, SwitchReason::ImpersonationEnded);
     }
 
     // ------------------------------------------------------------------
@@ -322,8 +332,11 @@ class AccountSwitcher
     public function developerLoginsEnabled(): bool
     {
         $environments = config('packstub-account-switcher.developer_logins.environments', ['local']);
+        $context = $this->context();
 
-        return app()->environment($environments) && $this->context()->hasDeveloperLogins();
+        return app()->environment($environments)
+            && $context->hasDeveloperLogins()
+            && $context->allowsDeveloperLogins();
     }
 
     /**
@@ -339,19 +352,60 @@ class AccountSwitcher
     }
 
     /**
+     * The accounts matching a search: the context's search when it has one, else the listed
+     * accounts filtered by the text (label, tag, name, e-mail, username). Empty outside the gates.
+     *
+     * @return Collection<int, Authenticatable>
+     */
+    public function searchDeveloperLogins(string $search): Collection
+    {
+        if (! $this->developerLoginsEnabled()) {
+            return collect();
+        }
+
+        $context = $this->context();
+
+        if ($context->searchesDeveloperLogins()) {
+            return $context->searchDeveloperLogins($search)->values();
+        }
+
+        $search = mb_strtolower(trim($search));
+
+        return $this->developerLoginUsers()
+            ->filter(fn (Authenticatable $user): bool => $search === '' || str_contains(mb_strtolower(implode(' ', array_filter([
+                $context->developerLoginLabel($user),
+                $context->developerLoginGroup($user),
+                $user->name ?? null,
+                $user->email ?? null,
+                $user->username ?? null,
+            ]))), $search))
+            ->values();
+    }
+
+    /**
+     * Whether the account may be signed into through the developer logins: listed, or found by the search.
+     */
+    public function isDeveloperLoginAllowed(Authenticatable $user, ?string $search = null): bool
+    {
+        $matches = fn (Authenticatable $candidate): bool => (string) $candidate->getAuthIdentifier() === (string) $user->getAuthIdentifier();
+
+        if ($this->developerLoginUsers()->contains($matches)) {
+            return true;
+        }
+
+        return filled($search) && $this->searchDeveloperLogins($search)->contains($matches);
+    }
+
+    /**
      * @throws AccountSwitchDenied
      */
-    public function developerLogin(Authenticatable $user): void
+    public function developerLogin(Authenticatable $user, ?string $search = null): void
     {
         if (! $this->developerLoginsEnabled()) {
             throw AccountSwitchDenied::developerLoginsDisabled();
         }
 
-        $allowed = $this->developerLoginUsers()->contains(
-            fn (Authenticatable $candidate): bool => $candidate->getAuthIdentifier() === $user->getAuthIdentifier(),
-        );
-
-        if (! $allowed) {
+        if (! $this->isDeveloperLoginAllowed($user, $search)) {
             throw AccountSwitchDenied::developerLoginsDisabled();
         }
 
@@ -366,6 +420,15 @@ class AccountSwitcher
         AccountSwitched::dispatch($from, $user, SwitchReason::DeveloperLogin);
     }
 
+    /**
+     * Where a developer login lands: the context's own answer if it has one, else the usual switch redirect.
+     */
+    public function developerLoginRedirectUrl(Authenticatable $user): string
+    {
+        return $this->context()->developerLoginRedirectUrlFor($user)
+            ?? $this->redirectUrlFor($user, SwitchReason::DeveloperLogin);
+    }
+
     // ------------------------------------------------------------------
     // Redirects
     // ------------------------------------------------------------------
@@ -373,9 +436,72 @@ class AccountSwitcher
     /**
      * Where to land after switching to the given user.
      */
-    public function redirectUrlFor(Authenticatable $user): string
+    public function redirectUrlFor(Authenticatable $user, ?SwitchReason $reason = null): string
     {
-        return $this->context()->redirectUrlFor($user);
+        return $this->context()->redirectUrlFor($user, $reason);
+    }
+
+    /**
+     * After a switch, a 403 or 404 on the page the browser landed on is answered with a redirect to
+     * the context's fallback URL. It is flashed by the switch, so it applies to that one request only.
+     */
+    public function redirectWhenPageIsInaccessible(HttpExceptionInterface $exception, Request $request): ?RedirectResponse
+    {
+        if (! in_array($exception->getStatusCode(), [403, 404], true) || ! $request->isMethod('GET') || ! $request->hasSession()) {
+            return null;
+        }
+
+        $fallbackUrl = $request->session()->pull(self::FALLBACK_URL_SESSION_KEY);
+
+        if (! is_string($fallbackUrl) || $fallbackUrl === $request->url()) {
+            return null;
+        }
+
+        // Not redirect(): while Livewire mounts a page its own redirector is bound in place of Laravel's.
+        return new RedirectResponse($fallbackUrl);
+    }
+
+    // ------------------------------------------------------------------
+    // Switch log
+    // ------------------------------------------------------------------
+
+    /**
+     * Extra data for every switch-log row, app-wide (e.g. the current tenant): fn (SwitchReason $reason): array
+     */
+    public static function resolveLogContextUsing(?Closure $callback): void
+    {
+        static::$logContextResolver = $callback;
+    }
+
+    /**
+     * Write a switch-log row for a switch that happened elsewhere (an SSO hand-off, a tenancy
+     * impersonation token, ...). Honours the same on/off switch as the package's own rows.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public function log(?Authenticatable $from, Authenticatable $to, SwitchReason $reason, array $context = []): ?AccountSwitch
+    {
+        if (! $this->context()->logsSwitches()) {
+            return null;
+        }
+
+        $context = [
+            ...(static::$logContextResolver ? (array) (static::$logContextResolver)($reason) : []),
+            ...$this->context()->switchLogContext($reason),
+            ...$context,
+        ];
+
+        return AccountSwitch::query()->create([
+            'from_user_id' => $from?->getAuthIdentifier(),
+            'to_user_id' => $to->getAuthIdentifier(),
+            'reason' => $reason,
+            'panel' => $this->context()->scope(),
+            'guard' => $this->guardName(),
+            'ip_address' => request()->ip(),
+            'user_agent' => Str::limit((string) request()->userAgent(), 500, ''),
+            'context' => $context ?: null,
+            'created_at' => now(),
+        ]);
     }
 
     // ------------------------------------------------------------------
@@ -403,23 +529,16 @@ class AccountSwitcher
             'password_hash_'.auth()->getDefaultDriver(),
             'password_hash_'.config('auth.defaults.guard'),
         ]));
+
+        $fallbackUrl = $this->context()->fallbackUrlFor($user);
+
+        if ($fallbackUrl !== null) {
+            session()->flash(self::FALLBACK_URL_SESSION_KEY, $fallbackUrl);
+        }
     }
 
     protected function record(?Authenticatable $from, Authenticatable $to, SwitchReason $reason): void
     {
-        if (! $this->context()->logsSwitches()) {
-            return;
-        }
-
-        AccountSwitch::query()->create([
-            'from_user_id' => $from?->getAuthIdentifier(),
-            'to_user_id' => $to->getAuthIdentifier(),
-            'reason' => $reason,
-            'panel' => $this->context()->scope(),
-            'guard' => $this->guardName(),
-            'ip_address' => request()->ip(),
-            'user_agent' => Str::limit((string) request()->userAgent(), 500, ''),
-            'created_at' => now(),
-        ]);
+        $this->log($from, $to, $reason);
     }
 }
