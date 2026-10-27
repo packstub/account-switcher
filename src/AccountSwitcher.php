@@ -231,13 +231,15 @@ class AccountSwitcher
             return false;
         }
 
-        if (! $this->supportsLinkedAccounts($from) || ! $from->isLinkedTo($target)) {
+        $context = $this->context();
+
+        // The feature toggle comes before isLinkedTo(): with linked accounts
+        // off the table may not exist, and nothing here should query it.
+        if (! $context->hasLinkedAccounts() || ! $this->supportsLinkedAccounts($from)) {
             return false;
         }
 
-        $context = $this->context();
-
-        if (! $context->hasLinkedAccounts() || ! $context->canAccess($target)) {
+        if (! $from->isLinkedTo($target) || ! $context->canAccess($target)) {
             return false;
         }
 
@@ -289,7 +291,7 @@ class AccountSwitcher
      */
     public function switchableAccounts(?Authenticatable $user): Collection
     {
-        if (! $this->supportsLinkedAccounts($user) || $this->isImpersonating()) {
+        if (! $this->supportsLinkedAccounts($user) || $this->isImpersonating() || ! $this->context()->hasLinkedAccounts()) {
             return new Collection;
         }
 

@@ -24,6 +24,22 @@ php artisan migrate
 > [!NOTE]
 > The migrations reference your user model's table through `config('auth.providers.users.model')`. If your guard authenticates a different model, set `user_model` in the config file **before** migrating. See [Configuration](configuration.md#user-model).
 
+### Without migrations
+
+Only need impersonation and one-click developer logins? Skip the migrations. Those two features keep their state in the session; only linked accounts (the `linked_accounts` table) and the switch log (the `account_switches` table) need the database. Turn both off in the config file:
+
+```php
+'features' => [
+    'impersonation' => true,
+    'linked_accounts' => false,
+    'developer_logins' => true,
+],
+
+'log_switches' => false,
+```
+
+Then answer "no" when the install command offers to run the migrations (or publish the config file alone), and skip the `HasLinkedAccounts` trait in step 2. Either feature can come back later: run the migrations and flip the key. Without the log, the `AccountSwitched` event is your audit trail; see [Security](security.md#audit-trail).
+
 ## 2. Prepare the user model
 
 Add the `HasLinkedAccounts` trait and the two authorization hooks:

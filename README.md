@@ -41,6 +41,8 @@ composer require packstub/account-switcher
 php artisan account-switcher:install
 ```
 
+Only need impersonation and developer logins? Set `features.linked_accounts` and `log_switches` to `false` and skip the migrations and the trait ([without migrations](https://packstub.dev/docs/account-switcher/installation#without-migrations)).
+
 Add the trait and the rules to your user model:
 
 ```php

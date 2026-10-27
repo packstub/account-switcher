@@ -38,7 +38,8 @@ return [
     // null = the `login` route when there is one, else the home page.
     'login_url' => null,
 
-    // Write an account_switches row for every switch.
+    // Write an account_switches row for every switch. Off, together with
+    // features.linked_accounts, the package runs without its migrations.
     'log_switches' => true,
 
     'developer_logins' => [
