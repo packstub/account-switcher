@@ -22,7 +22,7 @@ composer lint               # Pint
 
 ## Conventions
 
-- PHP 8.2+, Laravel 12 and 13. Every change needs a Pest test and a `CHANGELOG.md` line; headings are `## <version> — <date>`, the tag is `v<version>` on `main`.
+- PHP 8.2+, Laravel 12 and 13. Every change needs a Pest test and a `CHANGELOG.md` line; headings are `## <version> — <date>`, the tag is `v<version>` on `main`. The section becomes the GitHub release and `github-release.yml` appends GitHub's list of merged pull requests under it, so keep it short and human: an optional lead sentence, then at most about six one-line bullets saying what a user gets, in plain words (class or method names only when a user needs the name, never lists of them). Always keep breaking changes with an `**Upgrading:**` line, security or privacy fixes, new minimum PHP/Laravel versions and migrations to run; leave out CI, tests and refactors.
 - Nothing here may import from `Filament\` or `Livewire\`; what needs a panel belongs in `packstub/filament-account-switcher`.
 - Config keys, migration file names, the `packstub_account_switcher` session key, route names, the `SwitchContext` methods and the translation keys are shared with the Filament package; they must not change inside a major. Schema changes follow the workspace rule (final shape in `create_*`, guarded `add_*`).
 - Authorization stays in the service, never only in a controller or a view: `canImpersonate()` and `canSwitchToLinkedAccount()` are the single source, the routes call the same methods.
