@@ -2,6 +2,8 @@
 
 <div class="filament-hidden">
 
+![Account Switcher for Laravel — switch accounts without signing out, safely, in production](https://raw.githubusercontent.com/packstub/art/main/account-switcher/banner.jpg)
+
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/packstub/account-switcher.svg?style=flat-square)](https://packagist.org/packages/packstub/account-switcher)
 [![Tests](https://img.shields.io/github/actions/workflow/status/packstub/account-switcher/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/packstub/account-switcher/actions/workflows/tests.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/packstub/account-switcher.svg?style=flat-square)](https://packagist.org/packages/packstub/account-switcher)
@@ -18,6 +20,10 @@ Works with any session guard: Breeze, Jetstream, Fortify, Inertia or your own lo
 
 - Docs: [packstub.dev/docs/account-switcher](https://packstub.dev/docs/account-switcher) (the same pages live in [`docs/`](docs/))
 - Support: [GitHub issues](https://github.com/packstub/account-switcher/issues)
+
+![An admin impersonates a user from the users table, the banner says so, Switch back returns in one click, then the Switch to menu lists the linked accounts](https://raw.githubusercontent.com/packstub/art/main/filament-account-switcher/docs/account-switcher.gif)
+
+<sub>Shown in a Filament panel, with [Filament Account Switcher](https://github.com/packstub/filament-account-switcher). Without Filament, the same switches run through this package's routes, facade and Blade components (the banner, the developer logins).</sub>
 
 ## Features
 

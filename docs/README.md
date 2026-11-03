@@ -7,6 +7,10 @@ Switch between accounts in a Laravel app without signing out, safely, in product
 - Support: [GitHub issues](https://github.com/packstub/account-switcher/issues)
 - In a Filament panel: [Filament Account Switcher](https://packstub.dev/docs/filament-account-switcher) builds on this package.
 
+![An admin impersonates a user from the users table, the banner says so, Switch back returns in one click, then the Switch to menu lists the linked accounts](https://raw.githubusercontent.com/packstub/art/main/filament-account-switcher/docs/account-switcher.gif)
+
+<sub>Shown in a Filament panel, with [Filament Account Switcher](https://github.com/packstub/filament-account-switcher). Without Filament, the same switches run through this package's routes, facade and Blade components (the banner, the developer logins).</sub>
+
 ## Features
 
 - **[Impersonation](impersonation.md)**: a route and a facade to sign in as a user, a Blade banner with Switch back, rules on your model.
