@@ -2,6 +2,10 @@
 
 All notable changes to `packstub/account-switcher` are documented here.
 
+## Unreleased
+
+- `composer.json`'s homepage points at the package's page on packstub.dev
+
 ## 1.1.0 — 2026-10-27
 
 Everything Filament Account Switcher 4.1 to 4.2.1 added, now in the core, so a plain Laravel app gets it too.
